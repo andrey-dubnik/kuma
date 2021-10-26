@@ -18,6 +18,7 @@ import (
 	core_store "github.com/kumahq/kuma/pkg/core/resources/store"
 	"github.com/kumahq/kuma/pkg/core/xds"
 	"github.com/kumahq/kuma/pkg/dns/vips"
+	"github.com/kumahq/kuma/pkg/insights"
 	xds_context "github.com/kumahq/kuma/pkg/xds/context"
 	"github.com/kumahq/kuma/pkg/xds/envoy"
 	xds_topology "github.com/kumahq/kuma/pkg/xds/topology"
@@ -60,13 +61,27 @@ func (p *DataplaneProxyBuilder) Build(key core_model.ResourceKey, envoyContext *
 		return nil, err
 	}
 
+	tlsReady := map[string]bool{}
+
+	serviceInsight := core_mesh.NewServiceInsightResource()
+	insightName := insights.ServiceInsightName(key.Mesh)
+	if err := p.CachingResManager.Get(ctx, serviceInsight, core_store.GetByKey(insightName, key.Mesh)); err != nil {
+		return nil, err
+	}
+
+	backend := envoyContext.Mesh.Resource.Spec.GetMtls().GetEnabledBackend()
+	for svc, insight := range serviceInsight.Spec.GetServices() {
+		tlsReady[svc] = insight.IssuedBackends[backend] == insight.Dataplanes.Total
+	}
+
 	proxy := &xds.Proxy{
-		Id:         xds.FromResourceKey(key),
-		APIVersion: p.APIVersion,
-		Dataplane:  dp,
-		Metadata:   p.MetadataTracker.Metadata(key),
-		Routing:    *routing,
-		Policies:   *matchedPolicies,
+		Id:                  xds.FromResourceKey(key),
+		APIVersion:          p.APIVersion,
+		Dataplane:           dp,
+		Metadata:            p.MetadataTracker.Metadata(key),
+		Routing:             *routing,
+		Policies:            *matchedPolicies,
+		ServiceTLSReadiness: tlsReady,
 	}
 	return proxy, nil
 }
