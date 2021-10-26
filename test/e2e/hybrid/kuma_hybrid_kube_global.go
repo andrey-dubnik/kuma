@@ -11,6 +11,8 @@ import (
 func KubernetesUniversalDeploymentWhenGlobalIsOnK8S() {
 	var globalCluster, zoneCluster Cluster
 	var optsGlobal, optsZone = KumaK8sDeployOpts, KumaUniversalDeployOpts
+	optsGlobal = append(optsGlobal, WithEnv("KUMA_METRICS_MESH_MAX_RESYNC_TIMEOUT", "2s"))
+	optsZone = append(optsZone, WithEnv("KUMA_METRICS_MESH_MAX_RESYNC_TIMEOUT", "2s"))
 
 	BeforeEach(func() {
 		k8sClusters, err := NewK8sClusters(
